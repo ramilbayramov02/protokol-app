@@ -29,10 +29,10 @@ st.set_page_config(
 
 # ── LOGIN SİSTEMİ ─────────────────────────────────────────────────────────────
 USERS = {
-    "admin":  {"password": "protokol2024",  "role": "Bütün (Admin)"},
-    "pcc1":   {"password": "pcc1_2024",     "role": "PCC1"},
-    "pcc2":   {"password": "pcc2_2024",     "role": "PCC2"},
-    "pcc3":   {"password": "pcc3_2024",     "role": "PCC3"},
+    "admin":  {"password": "ucalyek",  "role": "Bütün (Admin)"},
+    "pcc1":   {"password": "ucaltek",     "role": "PCC1"},
+    "pcc2":   {"password": "ucalurek",     "role": "PCC2"},
+    "pcc3":   {"password": "ucalcell",     "role": "PCC3"},
 }
 
 def check_login(username, password):
