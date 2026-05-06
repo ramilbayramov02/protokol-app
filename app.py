@@ -27,6 +27,63 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── LOGIN SİSTEMİ ─────────────────────────────────────────────────────────────
+USERS = {
+    "admin":  {"password": "protokol2024",  "role": "Bütün (Admin)"},
+    "pcc1":   {"password": "pcc1_2024",     "role": "PCC1"},
+    "pcc2":   {"password": "pcc2_2024",     "role": "PCC2"},
+    "pcc3":   {"password": "pcc3_2024",     "role": "PCC3"},
+}
+
+def check_login(username, password):
+    u = USERS.get(username.lower().strip())
+    if u and u["password"] == password:
+        return u["role"]
+    return None
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "user_role" not in st.session_state:
+    st.session_state.user_role = None
+if "username" not in st.session_state:
+    st.session_state.username = ""
+
+if not st.session_state.logged_in:
+    st.markdown("""
+    <div style="max-width:420px;margin:80px auto 0;padding:40px;
+      background:#0f2040;border:1px solid #D4AF37;border-radius:14px;
+      box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+      <div style="text-align:center;margin-bottom:30px;">
+        <div style="font-size:11px;color:#8a9bb0;letter-spacing:1px;">
+          Azərbaycan Respublikası Prezidentinin</div>
+        <div style="font-size:18px;font-weight:900;color:#D4AF37;
+          letter-spacing:2px;margin-top:4px;">PROTOKOL XİDMƏTİ</div>
+        <div style="font-size:11px;color:#6a8aaa;margin-top:4px;
+          letter-spacing:2px;">VIP KORTEJ KOORDİNASİYA SİSTEMİ</div>
+        <div style="width:60px;height:2px;background:#D4AF37;
+          margin:16px auto 0;"></div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("login_form"):
+        st.markdown("<div style='max-width:420px;margin:0 auto;'>", unsafe_allow_html=True)
+        username = st.text_input("👤 İstifadəçi adı:", placeholder="pcc1 / pcc2 / pcc3 / admin")
+        password = st.text_input("🔒 Parol:", type="password", placeholder="Parolu daxil edin")
+        submitted = st.form_submit_button("🔑 Daxil ol", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        if submitted:
+            role = check_login(username, password)
+            if role:
+                st.session_state.logged_in = True
+                st.session_state.user_role = role
+                st.session_state.username  = username.lower().strip()
+                st.rerun()
+            else:
+                st.error("❌ İstifadəçi adı və ya parol yanlışdır!")
+    st.stop()
+
 # ── CSS ─────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -97,9 +154,9 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    # PCC seçimi
-    st.markdown("**👤 Operator Giriş**")
-    pcc_role = st.selectbox("PCC seçin:", ["Bütün (Admin)", "PCC1", "PCC2", "PCC3"])
+    # PCC rolu login-dən gəlir
+    pcc_role = st.session_state.user_role
+    st.markdown(f"**👤 Rol:** `{pcc_role}`")
     st.markdown("---")
 
     # Canlı saat
@@ -120,8 +177,14 @@ with st.sidebar:
     ], label_visibility="collapsed")
 
     st.markdown("---")
-    if st.button("🔄 Yenilə"):
+    st.markdown(f"**👤 {st.session_state.username.upper()}** giriş edib")
+    if st.button("🔄 Yenilə", key="sidebar_refresh"):
         get_fresh_log()
+        st.rerun()
+    if st.button("🚪 Çıxış", key="logout"):
+        st.session_state.logged_in = False
+        st.session_state.user_role = None
+        st.session_state.username  = ""
         st.rerun()
 
 # ── Load live log ─────────────────────────────────────────────────────────────
@@ -227,10 +290,10 @@ if page == "🏠 Ana Panel":
         return ""
 
     st.dataframe(
-        df_show.style.applymap(
+        df_show.style.map(
             lambda v: "background-color:#2a0a0a;color:#f87171;font-weight:700" if v=="Delay" else "",
             subset=["HS St"]
-        ).applymap(
+        ).map(
             lambda v: "background-color:#2a0a0a;color:#f87171;font-weight:700" if isinstance(v,int) and v>0 else "",
             subset=["Gecik"]
         ),
