@@ -29,7 +29,7 @@ st.set_page_config(
 
 # ── LOGIN SİSTEMİ ─────────────────────────────────────────────────────────────
 USERS = {
-    "admin":  {"password": "ucalyek",  "role": "Bütün (Admin)"},
+    "admin":  {"password": "azprotokol2026",  "role": "Bütün (Admin)"},
     "pcc1":   {"password": "ucaltek",     "role": "PCC1"},
     "pcc2":   {"password": "ucalurek",     "role": "PCC2"},
     "pcc3":   {"password": "ucalcell",     "role": "PCC3"},
