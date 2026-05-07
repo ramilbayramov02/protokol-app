@@ -1,0 +1,5 @@
+# GitHub-a yüklənməməli fayllar
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+.env
