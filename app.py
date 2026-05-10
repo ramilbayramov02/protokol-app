@@ -13,6 +13,10 @@ import time
 import re
 
 from data_loader import load_excel, HOTEL_COORDS, BOS, EVENT_ORDER
+
+# Supabase constants (driver GPS üçün)
+SUPABASE_URL = "https://vsbxbqklsvtmvuxoenut.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzYnhicWtsc3Z0bXZ1eG9lbnV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwOTExMTEsImV4cCI6MjA5MzY2NzExMX0.XTuQD6W4AhJ5s6tlhYrZmNirMNskS_lNBkzrG4prt04"
 from calculations import (hotel_distances, scenario_simultaneous,
                            scenario_staggered, time_diff_min, infer_status,
                            calc_distance_km)
@@ -62,6 +66,155 @@ if "user_role" not in st.session_state:
 if "username" not in st.session_state:
     st.session_state.username = ""
 
+# ── SÜRÜCÜ BYPASS — login olmadan GPS səhifəsi ───────────────────────────────
+_params = st.query_params
+_driver_country = _params.get("driver", "")
+
+if _driver_country:
+    # Sürücü səhifəsi — parolsuz
+    st.markdown("""
+    <style>
+    [data-testid="stAppViewContainer"]{background:#071120;}
+    [data-testid="stSidebar"]{display:none;}
+    [data-testid="collapsedControl"]{display:none;}
+    header{display:none;}
+    .stButton>button{background:linear-gradient(135deg,#D4AF37,#a8862d);
+      color:#071120;font-weight:900;border:none;border-radius:10px;
+      font-size:18px;padding:18px;width:100%;}
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Parse country and convoy from driver param (format: "Kenya__DYP")
+    parts = _driver_country.split("__")
+    _country = parts[0] if len(parts) > 0 else ""
+    _convoy  = parts[1] if len(parts) > 1 else "DYP"
+
+    # Get driver name from Excel
+    try:
+        _veh = vehicles[vehicles["country_name"] == _country]
+        _drv_name = "Sürücü"
+        if not _veh.empty:
+            _vid  = _veh.iloc[0]["vehicle_id"]
+            _drv  = staff[(staff["vehicle_id"]==_vid)&(staff["role"]=="Driver 1")]
+            if not _drv.empty:
+                _drv_name = _drv.iloc[0]["full_name"]
+    except:
+        _drv_name = "Sürücü"
+
+    _vehicle_id = f"{_country}__{_convoy}"
+
+    st.markdown(f"""
+    <div style='text-align:center;padding:15px 0 5px;'>
+      <div style='font-size:10px;color:#6a8aaa;'>Azərbaycan Respublikası Prezidentinin</div>
+      <div style='font-size:15px;font-weight:900;color:#D4AF37;'>PROTOKOL XİDMƏTİ</div>
+    </div>
+    <div style='background:#0f2040;border:2px solid #D4AF37;border-radius:12px;
+      padding:20px;text-align:center;margin:10px 0;'>
+      <div style='font-size:24px;font-weight:800;color:#D4AF37;'>{_country}</div>
+      <div style='font-size:14px;color:#c0d0e0;margin-top:4px;'>🚗 {_convoy}</div>
+      <div style='font-size:13px;color:#8a9bb0;margin-top:4px;'>👤 {_drv_name}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # GPS JavaScript — avtomatik alır və göndərir
+    st.components.v1.html(f"""
+    <!DOCTYPE html><html>
+    <head><meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+      body{{background:#071120;margin:0;padding:16px;font-family:Arial,sans-serif;color:#c0d0e0;}}
+      .card{{background:#0f2040;border:1px solid #D4AF37;border-radius:12px;padding:20px;text-align:center;}}
+      #status{{font-size:13px;color:#8a9bb0;margin-bottom:10px;min-height:44px;}}
+      #coords{{font-family:monospace;font-size:13px;color:#5fb87a;margin:10px 0;min-height:55px;line-height:1.6;}}
+      .btn{{background:linear-gradient(135deg,#D4AF37,#a8862d);color:#071120;border:none;
+        border-radius:10px;font-size:18px;font-weight:900;padding:18px;width:100%;cursor:pointer;margin-top:8px;}}
+      #sent{{background:#0a2010;border:1px solid #16a34a;border-radius:8px;padding:12px;
+        color:#5fb87a;font-size:14px;margin-top:12px;display:none;}}
+      #timer{{font-size:11px;color:#6a8aaa;margin-top:8px;}}
+    </style></head>
+    <body>
+    <div class="card">
+      <div id="status">📍 GPS hazırlanır...</div>
+      <div id="coords"></div>
+      <button class="btn" onclick="sendGPS()">📍 GPS Göndər</button>
+      <div id="sent">✅ GPS göndərildi!</div>
+      <div id="timer"></div>
+    </div>
+    <script>
+    var lastLat=null,lastLon=null,lastSpd=0,timerInt=null,countdown=30;
+    var SUPA_URL="{SUPABASE_URL}";
+    var SUPA_KEY="{SUPABASE_KEY}";
+    var VEH_ID="{_vehicle_id}";
+    var COUNTRY="{_country}";
+    var DRIVER="{_drv_name}";
+
+    function setStatus(msg,col){{document.getElementById("status").innerText=msg;document.getElementById("status").style.color=col||"#8a9bb0";}}
+
+    function getGPS(cb){{
+      if(!navigator.geolocation){{setStatus("GPS dəstəklənmir","#f87171");return;}}
+      navigator.geolocation.getCurrentPosition(
+        function(p){{
+          lastLat=p.coords.latitude;lastLon=p.coords.longitude;
+          lastSpd=p.coords.speed?p.coords.speed*3.6:0;
+          document.getElementById("coords").innerText=
+            "📍 Lat: "+lastLat.toFixed(6)+"\n📍 Lon: "+lastLon.toFixed(6)+"\n🚗 "+lastSpd.toFixed(1)+" km/h";
+          setStatus("✅ GPS alındı","#5fb87a");
+          if(cb)cb();
+        }},
+        function(e){{setStatus("❌ GPS xətası: "+e.message,"#f87171");}},
+        {{enableHighAccuracy:true,timeout:15000,maximumAge:5000}}
+      );
+    }}
+
+    function sendToSupabase(){{
+      if(lastLat===null)return;
+      var now=new Date().toISOString();
+      var data={{vehicle_id:VEH_ID,country:COUNTRY,driver_name:DRIVER,
+        lat:lastLat,lon:lastLon,speed_kmh:lastSpd,updated_at:now}};
+      // Check if exists
+      fetch(SUPA_URL+"/rest/v1/gps_tracking?vehicle_id=eq."+encodeURIComponent(VEH_ID),{{
+        headers:{{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY}}
+      }}).then(r=>r.json()).then(function(ex){{
+        var method=ex.length>0?"PATCH":"POST";
+        var url=ex.length>0?
+          SUPA_URL+"/rest/v1/gps_tracking?vehicle_id=eq."+encodeURIComponent(VEH_ID):
+          SUPA_URL+"/rest/v1/gps_tracking";
+        fetch(url,{{
+          method:method,
+          headers:{{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,
+            "Content-Type":"application/json","Prefer":"return=minimal"}},
+          body:JSON.stringify(data)
+        }}).then(function(){{
+          document.getElementById("sent").style.display="block";
+          setStatus("✅ Koordinat göndərildi!","#5fb87a");
+          startTimer();
+        }});
+      }});
+    }}
+
+    function sendGPS(){{
+      setStatus("GPS alınır...","#D4AF37");
+      getGPS(function(){{sendToSupabase();}});
+    }}
+
+    function startTimer(){{
+      countdown=30;
+      clearInterval(timerInt);
+      timerInt=setInterval(function(){{
+        countdown--;
+        document.getElementById("timer").innerText=countdown+" san sonra avtomatik yenilənir";
+        if(countdown<=0)sendGPS();
+      }},1000);
+    }}
+
+    // Başla
+    getGPS();
+    setTimeout(sendGPS,2000);
+    </script></body></html>
+    """, height=340)
+
+    st.stop()
+
+# ── NORMAL LOGIN ──────────────────────────────────────────────────────────────
 if not st.session_state.logged_in:
     st.markdown(f"""
     <div style="max-width:420px;margin:60px auto 0;padding:40px;
@@ -810,28 +963,26 @@ elif page == "📡 GPS İzləmə":
             pcc_v   = d.get("pcc", "")
             order_n = d["convoy_order"]
             veh_c   = vehicles[vehicles["country_name"]==cn]
-            drv_names = []
-            for _, v in veh_c.iterrows():
-                d1 = staff[(staff["vehicle_id"]==v["vehicle_id"])&(staff["role"]=="Driver 1")]
-                if not d1.empty:
-                    drv_names.append(f"{v['convoy_type']}: {d1.iloc[0]['full_name']}")
-            link = app_url + "/driver?country=" + urllib.parse.quote(cn)
-            st.markdown(f"""
-            <div style='background:#0f2040;border:1px solid #1e3a5f;
-              border-left:3px solid #D4AF37;border-radius:8px;padding:10px 14px;margin-bottom:6px;'>
-              <div style='display:flex;justify-content:space-between;'>
-                <div>
-                  <span style='color:#D4AF37;font-weight:700;'>#{order_n} {cn}</span>
-                  <span style='color:#8a9bb0;font-size:11px;margin-left:8px;'>{pcc_v}</span>
-                </div>
-              </div>
-              <div style='font-size:10px;color:#6a8aaa;margin-top:3px;'>{" | ".join(drv_names[:3])}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            col1, col2 = st.columns([5, 1])
-            col1.code(link, language=None)
-            if col2.button("📋", key=f"copy_{order_n}", help="Kopyala"):
-                st.toast(f"✅ {cn} linki kopyalandı!")
+
+            with st.expander(f"#{order_n} {cn} — {pcc_v}", expanded=False):
+                for _, v in veh_c.iterrows():
+                    convoy_type = v["convoy_type"]
+                    d1 = staff[(staff["vehicle_id"]==v["vehicle_id"])&(staff["role"]=="Driver 1")]
+                    drv_name = d1.iloc[0]["full_name"] if not d1.empty else "—"
+                    drv_tel  = d1.iloc[0]["phone_number"] if not d1.empty else ""
+                    link = app_url + "/?driver=" + urllib.parse.quote(cn + "__" + convoy_type)
+                    st.markdown(f"""
+                    <div style='background:#152238;border:1px solid #2a3f5f;border-radius:8px;
+                      padding:10px;margin-bottom:6px;'>
+                      <div style='color:#D4AF37;font-weight:700;font-size:13px;'>{convoy_type}</div>
+                      <div style='color:#c0d0e0;font-size:12px;'>👤 {drv_name}</div>
+                      <div style='color:#5fb87a;font-size:11px;font-family:monospace;'>{drv_tel}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    col1, col2 = st.columns([4, 1])
+                    col1.code(link, language=None)
+                    if col2.button("📋", key=f"copy_{order_n}_{convoy_type}", help="Kopyala"):
+                        st.toast(f"✅ {cn} {convoy_type} linki kopyalandı!")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 7. SSENARİ MODU
