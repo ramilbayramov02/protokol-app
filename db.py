@@ -1,8 +1,17 @@
-# db.py — Supabase-siz, yalnız session_state
+# db.py — Session_state + Supabase (yalnız GPS üçün)
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+from supabase import create_client
 
+SUPABASE_URL = "https://vsbxbqklsvtmvuxoenut.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzYnhicWtsc3Z0bXZ1eG9lbnV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwOTExMTEsImV4cCI6MjA5MzY2NzExMX0.XTuQD6W4AhJ5s6tlhYrZmNirMNskS_lNBkzrG4prt04"
+
+@st.cache_resource
+def get_db():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ── Movement log — session_state ────────────────────────────────────────────
 def init_db():
     if "log_data" not in st.session_state:
         from data_loader import load_excel
@@ -36,23 +45,30 @@ def reset_event(log_id):
         df.at[i, "recorded_by"]  = ""
     st.session_state["log_data"] = df
 
+# ── GPS — Supabase ───────────────────────────────────────────────────────────
 def upsert_gps(vehicle_id, country, driver_name, lat, lon, speed=0):
-    if "gps_data" not in st.session_state:
-        st.session_state["gps_data"] = []
-    gps = st.session_state["gps_data"]
-    for g in gps:
-        if g["vehicle_id"] == vehicle_id:
-            g.update({"country": country, "driver_name": driver_name,
-                      "lat": lat, "lon": lon, "speed_kmh": speed,
-                      "updated_at": datetime.now().strftime("%H:%M:%S")})
-            st.session_state["gps_data"] = gps
-            return
-    gps.append({"vehicle_id": vehicle_id, "country": country,
+    try:
+        db  = get_db()
+        now = datetime.utcnow().isoformat()
+        existing = db.table("gps_tracking").select("id").eq("vehicle_id", vehicle_id).execute()
+        if existing.data:
+            db.table("gps_tracking").update({
+                "country": country, "driver_name": driver_name,
+                "lat": lat, "lon": lon, "speed_kmh": speed, "updated_at": now,
+            }).eq("vehicle_id", vehicle_id).execute()
+        else:
+            db.table("gps_tracking").insert({
+                "vehicle_id": vehicle_id, "country": country,
                 "driver_name": driver_name, "lat": lat, "lon": lon,
-                "speed_kmh": speed,
-                "updated_at": datetime.now().strftime("%H:%M:%S")})
-    st.session_state["gps_data"] = gps
+                "speed_kmh": speed, "updated_at": now,
+            }).execute()
+    except Exception as e:
+        st.warning(f"GPS xətası: {e}")
 
 def get_gps() -> pd.DataFrame:
-    data = st.session_state.get("gps_data", [])
-    return pd.DataFrame(data) if data else pd.DataFrame()
+    try:
+        db  = get_db()
+        res = db.table("gps_tracking").select("*").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
