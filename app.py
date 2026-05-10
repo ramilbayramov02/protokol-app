@@ -188,7 +188,6 @@ with st.sidebar:
         "🏨 Otel & Məsafə",
         "🗺️ Canlı Xəritə",
         "📡 GPS İzləmə",
-        "📱 Sürücü GPS",
         "🧮 Ssenari Modu",
         "📄 Hesabat",
     ], label_visibility="collapsed")
@@ -737,9 +736,9 @@ elif page == "🗺️ Canlı Xəritə":
 # 6. GPS İZLƏMƏ
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "📡 GPS İzləmə":
-    st.markdown("## 📡 Sürücü GPS İzləmə")
+    st.markdown("## 📡 GPS İzləmə & Sürücü Linkləri")
 
-    tab1, tab2 = st.tabs(["🗺️ Canlı Xəritə","📱 Sürücü Linki"])
+    tab1, tab2 = st.tabs(["🗺️ Canlı GPS Xəritəsi", "🔗 Sürücü Linkləri"])
 
     with tab1:
         gps_data = get_gps()
@@ -788,176 +787,51 @@ elif page == "📡 GPS İzləmə":
                 use_container_width=True, hide_index=True)
 
     with tab2:
-        st.markdown("### 📱 Sürücü GPS Göndərmə")
-        st.info("Aşağıdakı formu sürücü telefonunda açaraq GPS koordinatlarını göndərə bilər.")
-
-        with st.form("gps_form"):
-            col1,col2 = st.columns(2)
-            v_country = col1.selectbox("Ölkə:", sorted(vehicles["country_name"].unique()))
-            v_id      = col2.selectbox("Kortej:", ["DYP","S1","VVİP","P1","D1"])
-
-            # Driver name from staff
-            veh_match = vehicles[(vehicles["country_name"]==v_country)&(vehicles["convoy_type"]==v_id)]
-            if not veh_match.empty:
-                vid      = veh_match.iloc[0]["vehicle_id"]
-                drv_match= staff[(staff["vehicle_id"]==vid)&(staff["role"]=="Driver 1")]
-                drv_name = drv_match.iloc[0]["full_name"] if not drv_match.empty else ""
-            else:
-                drv_name = ""
-
-            st.markdown(f"**Sürücü:** {drv_name}")
-            lat_inp = st.number_input("Latitude:",  value=40.3983, format="%.6f")
-            lon_inp = st.number_input("Longitude:", value=49.8672, format="%.6f")
-            spd_inp = st.number_input("Sürət (km/h):", value=0.0, min_value=0.0)
-
-            if st.form_submit_button("📡 GPS Göndər"):
-                upsert_gps(f"{v_country}_{v_id}", v_country, drv_name, lat_inp, lon_inp, spd_inp)
-                st.success(f"✅ {v_country} — GPS göndərildi!")
-                st.rerun()
-
-        st.markdown("---")
+        st.markdown("### 🔗 Sürücü GPS Linkləri")
         st.markdown("""
-        **📱 Telefon GPS-i avtomatik istifadə etmək üçün:**
+        <div style='background:#0f2040;border:1px solid #D4AF37;border-radius:10px;
+          padding:16px;margin-bottom:20px;'>
+          <div style='color:#D4AF37;font-weight:700;margin-bottom:8px;'>📋 İstifadə qaydası:</div>
+          <div style='color:#8a9bb0;font-size:12px;'>
+            1️⃣ Linki kopyala → WhatsApp-la sürücüyə göndər<br>
+            2️⃣ Sürücü linki telefonunda açır<br>
+            3️⃣ Yalnız GPS düyməsi görür → basır<br>
+            4️⃣ GPS koordinatı buraya gəlir → xəritədə görünür
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        Streamlit Cloud-a deploy etdikdən sonra sürücüyə bu linki göndər:
-        ```
-        https://[sizin-app].streamlit.app/?driver=TR001
-        ```
-        Telefon avtomatik GPS koordinatlarını göndərəcək.
-        """)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 6b. SÜRÜCÜ GPS SƏHİFƏSİ
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "📱 Sürücü GPS":
-    st.markdown("## 📱 Sürücü GPS Göndərmə")
-
-    # URL parametrindən driver ID al
-    params = st.query_params
-    driver_id = params.get("driver", "")
-
-    st.markdown("""
-    <div style='background:#0f2040;border:1px solid #D4AF37;border-radius:10px;
-      padding:20px;margin-bottom:20px;'>
-      <div style='font-size:13px;color:#D4AF37;font-weight:700;margin-bottom:10px;'>
-        📱 Bu səhifəni sürücüyə göndər
-      </div>
-      <div style='font-size:11px;color:#8a9bb0;'>
-        Sürücü bu linki telefonunda açır → "GPS Göndər" düyməsini basır →
-        koordinatlar avtomatik göndərilir
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Sürücü məlumatları
-    col1, col2 = st.columns(2)
-    with col1:
-        from data_loader import load_excel
-        _, vehicles, staff, _, _ = load_excel()
-        v_country = st.selectbox("Ölkə:", sorted(vehicles["country_name"].unique()))
-        v_type    = st.selectbox("Kortej:", ["DYP","S1","VVİP","P1","D1"])
-
-    with col2:
-        veh_m = vehicles[(vehicles["country_name"]==v_country)&(vehicles["convoy_type"]==v_type)]
-        if not veh_m.empty:
-            vid      = veh_m.iloc[0]["vehicle_id"]
-            drv_m    = staff[(staff["vehicle_id"]==vid)&(staff["role"]=="Driver 1")]
-            drv_name = drv_m.iloc[0]["full_name"] if not drv_m.empty else "Sürücü"
-        else:
-            drv_name = "Sürücü"
-        st.markdown(f"<br><div style='color:#D4AF37;font-weight:700;margin-top:20px;'>👤 {drv_name}</div>", unsafe_allow_html=True)
-
-    st.markdown("---")
-    st.markdown("### 📍 GPS Koordinat Göndər")
-
-    # JavaScript ilə real telefon GPS
-    st.components.v1.html("""
-    <div style="font-family:Arial;background:#0f2040;padding:20px;border-radius:10px;
-      border:1px solid #D4AF37;max-width:400px;margin:0 auto;">
-      <div id="status" style="color:#8a9bb0;font-size:12px;margin-bottom:12px;">
-        GPS hazırlanır...
-      </div>
-      <div id="coords" style="font-family:monospace;font-size:13px;color:#5fb87a;
-        margin-bottom:16px;"></div>
-      <button onclick="getGPS()" style="background:#D4AF37;color:#071120;border:none;
-        padding:12px 24px;border-radius:8px;font-weight:700;font-size:14px;
-        cursor:pointer;width:100%;">
-        📍 GPS Koordinatı Al
-      </button>
-    </div>
-    <script>
-    function getGPS() {
-      var status = document.getElementById('status');
-      var coords = document.getElementById('coords');
-      status.innerText = 'GPS alınır...';
-      status.style.color = '#D4AF37';
-      if (!navigator.geolocation) {
-        status.innerText = 'GPS dəstəklənmir!';
-        status.style.color = '#f87171';
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        function(pos) {
-          var lat = pos.coords.latitude.toFixed(6);
-          var lon = pos.coords.longitude.toFixed(6);
-          var spd = pos.coords.speed ? (pos.coords.speed * 3.6).toFixed(1) : 0;
-          coords.innerText = 'Lat: ' + lat + '\nLon: ' + lon + '\nSürət: ' + spd + ' km/h';
-          status.innerText = '✅ GPS alındı! Aşağıdakı dəyərləri kopyala:';
-          status.style.color = '#5fb87a';
-          // Streamlit-ə göndər
-          window.parent.postMessage({
-            type: 'streamlit:setComponentValue',
-            value: {lat: parseFloat(lat), lon: parseFloat(lon), speed: parseFloat(spd)}
-          }, '*');
-        },
-        function(err) {
-          status.innerText = 'GPS xətası: ' + err.message;
-          status.style.color = '#f87171';
-        },
-        {enableHighAccuracy: true, timeout: 10000}
-      );
-    }
-    // Avtomatik al
-    getGPS();
-    setInterval(getGPS, 15000);
-    </script>
-    """, height=200)
-
-    st.markdown("---")
-    st.markdown("**Əl ilə daxil et (GPS işləməsə):**")
-    col1, col2, col3 = st.columns(3)
-    lat_inp = col1.number_input("Latitude:",  value=40.3983, format="%.6f", step=0.0001)
-    lon_inp = col2.number_input("Longitude:", value=49.8672, format="%.6f", step=0.0001)
-    spd_inp = col3.number_input("Sürət (km/h):", value=0.0, min_value=0.0, step=1.0)
-
-    if st.button("📡 GPS Göndər", use_container_width=True):
-        vehicle_id = f"{v_country}_{v_type}"
-        upsert_gps(vehicle_id, v_country, drv_name, lat_inp, lon_inp, spd_inp)
-        st.success(f"✅ {v_country} — {drv_name} GPS göndərildi!")
-        st.markdown(f"""
-        <div style='background:#0a2010;border:1px solid #16a34a;border-radius:8px;
-          padding:12px;font-family:monospace;font-size:12px;color:#5fb87a;'>
-          📍 Lat: {lat_inp} | Lon: {lon_inp} | Sürət: {spd_inp} km/h
-        </div>""", unsafe_allow_html=True)
-
-    st.markdown("---")
-    st.markdown("### 🔗 Sürücülərə göndəriləcək linklər")
-    st.info("Bu linkləri müvafiq sürücülərə göndər — açanda ölkə avtomatik seçilmiş gəlir")
-
-    app_url = "https://ramilbayramov02-protokol-app.streamlit.app"
-    _, veh_all, _, _, _ = load_excel()
-    del_sorted = delegations.sort_values("convoy_order")
-
-    for _, d in del_sorted.iterrows():
-        cn = d["country_name"]
-        veh_c = veh_all[veh_all["country_name"]==cn]
-        if veh_c.empty:
-            continue
         import urllib.parse
-        link = f"{app_url}?page=driver&country={urllib.parse.quote(cn)}"
-        col1, col2 = st.columns([3,1])
-        col1.markdown(f"**#{d['convoy_order']} {cn}** — {d.get('pcc','')}")
-        col2.code(link, language=None)
+        app_url = "https://ramilbayramov02-protokol-app.streamlit.app"
+        del_sorted = delegations.sort_values("convoy_order")
+
+        for _, d in del_sorted.iterrows():
+            cn      = d["country_name"]
+            pcc_v   = d.get("pcc", "")
+            order_n = d["convoy_order"]
+            veh_c   = vehicles[vehicles["country_name"]==cn]
+            drv_names = []
+            for _, v in veh_c.iterrows():
+                d1 = staff[(staff["vehicle_id"]==v["vehicle_id"])&(staff["role"]=="Driver 1")]
+                if not d1.empty:
+                    drv_names.append(f"{v['convoy_type']}: {d1.iloc[0]['full_name']}")
+            link = app_url + "/driver?country=" + urllib.parse.quote(cn)
+            st.markdown(f"""
+            <div style='background:#0f2040;border:1px solid #1e3a5f;
+              border-left:3px solid #D4AF37;border-radius:8px;padding:10px 14px;margin-bottom:6px;'>
+              <div style='display:flex;justify-content:space-between;'>
+                <div>
+                  <span style='color:#D4AF37;font-weight:700;'>#{order_n} {cn}</span>
+                  <span style='color:#8a9bb0;font-size:11px;margin-left:8px;'>{pcc_v}</span>
+                </div>
+              </div>
+              <div style='font-size:10px;color:#6a8aaa;margin-top:3px;'>{" | ".join(drv_names[:3])}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            col1, col2 = st.columns([5, 1])
+            col1.code(link, language=None)
+            if col2.button("📋", key=f"copy_{order_n}", help="Kopyala"):
+                st.toast(f"✅ {cn} linki kopyalandı!")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 7. SSENARİ MODU
