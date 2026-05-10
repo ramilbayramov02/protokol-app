@@ -811,17 +811,7 @@ elif page == "📡 GPS İzləmə":
                 st.success(f"✅ {v_country} — GPS göndərildi!")
                 st.rerun()
 
-        st.markdown("---")
-        st.markdown("""
-        **📱 Telefon GPS-i avtomatik istifadə etmək üçün:**
-
-        Streamlit Cloud-a deploy etdikdən sonra sürücüyə bu linki göndər:
-        ```
-        https://[sizin-app].streamlit.app/?driver=TR001
-        ```
-        Telefon avtomatik GPS koordinatlarını göndərəcək.
-        """)
-
+     
 # ══════════════════════════════════════════════════════════════════════════════
 # 6b. SÜRÜCÜ GPS SƏHİFƏSİ
 # ══════════════════════════════════════════════════════════════════════════════
