@@ -658,89 +658,80 @@ elif page == "🗺️ Canlı Xəritə":
     c1,c2,c3 = st.columns(3)
     map_status = c1.selectbox("Status filtri:", ["Hamısı","OK","Delay","Pending"])
     map_hotel  = c2.selectbox("Otel filtri:", ["Hamısı"] + list(HOTEL_COORDS.keys()))
-    map_theme  = c3.selectbox("Xəritə temi:", ["Qaranlıq","Açıq"])
+    map_theme  = c3.selectbox("Xəritə temi:", ["Satellite","Roadmap","Hybrid"])
 
-    tile = "CartoDB.DarkMatter" if map_theme=="Qaranlıq" else "CartoDB.Positron"
-    m    = folium.Map(location=[40.40, 49.87], zoom_start=12, tiles=tile)
-
-    # Hotels
-    for hotel, coords in HOTEL_COORDS.items():
-        hotel_dels = delegations[delegations["greeting_location"].str.contains(hotel,na=False,case=False)]
-        n = len(hotel_dels)
-        folium.CircleMarker(
-            [coords["lat"], coords["lon"]], radius=14,
-            color=coords["color"], fill=True, fill_color=coords["color"], fill_opacity=0.3,
-            popup=folium.Popup(f"<b style='color:{coords['color']}'>{hotel}</b><br>{n} delegasiya", max_width=200),
-            tooltip=hotel,
-        ).add_to(m)
-        folium.Marker(
-            [coords["lat"], coords["lon"]],
-            icon=folium.DivIcon(html=f"<div style='color:{coords['color']};font-size:10px;font-weight:700;white-space:nowrap;'>{hotel}</div>"),
-        ).add_to(m)
-
-    # BOS
-    folium.CircleMarker(
-        [BOS["lat"], BOS["lon"]], radius=18,
-        color="#ff4444", fill=True, fill_color="#ff4444", fill_opacity=0.4,
-        tooltip="BOS",
-        popup=folium.Popup("<b style='color:#ff4444'>BOS — Bakı Olimpiya Stadionu</b>", max_width=200),
-    ).add_to(m)
-
-    # Delegation dots + routes
-    log_summ = log.groupby(["country_name","pcc"]).agg(
-        has_delay=("status", lambda x: (x=="Delay").any()),
-        all_pend=("status",  lambda x: (x=="Pending").all()),
-        hs_status=("status", lambda x: x[log[log["country_name"]==x.name[0] if isinstance(x.name,tuple) else x.name]["event_name"]=="Handshake"].values[0] if len(x[log["event_name"]=="Handshake"])>0 else "Pending"),
-    ).reset_index() if False else log.groupby("country_name").agg(
+    # Google Maps
+    log_summ = log.groupby("country_name").agg(
         pcc=("pcc","first"),
         has_delay=("status", lambda x:(x=="Delay").any()),
         all_pend=("status",  lambda x:(x=="Pending").all()),
     ).reset_index()
-
     log_summ["map_status"] = log_summ.apply(
         lambda r: "Delay" if r["has_delay"] else ("Pending" if r["all_pend"] else "OK"), axis=1)
-    log_summ["dot_color"] = log_summ["map_status"].map(
-        {"OK":"#16a34a","Delay":"#dc2626","Pending":"#f5d020"})
-
     if map_status != "Hamısı":
         log_summ = log_summ[log_summ["map_status"]==map_status]
-
     log_summ = log_summ.merge(
         delegations[["country_name","greeting_location","convoy_order"]], on="country_name", how="left")
-
     if map_hotel != "Hamısı":
         log_summ = log_summ[log_summ["greeting_location"].str.contains(map_hotel,na=False,case=False)]
+    map_type_js = {"Satellite":"satellite","Roadmap":"roadmap","Hybrid":"hybrid"}.get(map_theme,"satellite")
+    
+    def _gmap_render(log_summ, map_type_js):
+        m_lines = []
+        for hotel, hc in HOTEL_COORDS.items():
+            lbl = hotel[:4]
+            m_lines.append(
+                "new google.maps.Marker({position:{lat:" + str(hc["lat"]) + ",lng:" + str(hc["lon"]) + "},"
+                "map:map,icon:{path:google.maps.SymbolPath.CIRCLE,scale:14,"
+                "fillColor:'" + hc["color"] + "',fillOpacity:0.9,strokeColor:'#fff',strokeWeight:2},"
+                "label:{text:'" + lbl + "',color:'white',fontSize:'9px',fontWeight:'700'}});"
+            )
+        m_lines.append(
+            "new google.maps.Marker({position:{lat:" + str(BOS["lat"]) + ",lng:" + str(BOS["lon"]) + "},"
+            "map:map,icon:{path:google.maps.SymbolPath.CIRCLE,scale:18,"
+            "fillColor:'#ff4444',fillOpacity:0.9,strokeColor:'#fff',strokeWeight:3},"
+            "label:{text:'BOS',color:'white',fontSize:'10px',fontWeight:'900'}});"
+        )
+        for _, r in log_summ.iterrows():
+            hotel2 = r.get("greeting_location","")
+            hc2 = next((v for k,v in HOTEL_COORDS.items() if k.lower() in (hotel2 or "").lower()), None)
+            if hc2 is None: continue
+            lat2 = hc2["lat"] + (r["convoy_order"]-10)*0.00025
+            lon2 = hc2["lon"] + (r["convoy_order"]%5)*0.0003
+            col = {"OK":"#16a34a","Delay":"#dc2626"}.get(r["map_status"],"#f5d020")
+            m_lines.append(
+                "new google.maps.Polyline({path:[{lat:"+str(lat2)+",lng:"+str(lon2)+"},{lat:"+str(BOS["lat"])+",lng:"+str(BOS["lon"])+"}],"
+                "map:map,strokeColor:'"+col+"',strokeOpacity:0.5,strokeWeight:1.5});"
+            )
+            m_lines.append(
+                "new google.maps.Marker({position:{lat:"+str(lat2)+",lng:"+str(lon2)+"},"
+                "map:map,icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,"
+                "fillColor:'"+col+"',fillOpacity:1,strokeColor:'#fff',strokeWeight:1.5}});"
+            )
+        gps_df2 = get_gps()
+        if not gps_df2.empty:
+            for _, g in gps_df2.iterrows():
+                try:
+                    m_lines.append(
+                        "new google.maps.Marker({position:{lat:"+str(float(g["lat"]))+",lng:"+str(float(g["lon"]))+"},"
+                        "map:map,icon:{url:'https://maps.google.com/mapfiles/ms/icons/cabs.png'}});"
+                    )
+                except: pass
+        js = "\n".join(m_lines)
+        return (
+            "<!DOCTYPE html><html><head><style>body{margin:0}#map{height:555px;width:100%}</style></head>"
+            "<body><div id='map'></div><script>"
+            "function initMap(){"
+            "var map=new google.maps.Map(document.getElementById('map'),{"
+            "center:{lat:40.40,lng:49.87},zoom:12,mapTypeId:'" + map_type_js + "'});"
+            + js + "}"
+            "</script>"
+            "<script src='https://maps.googleapis.com/maps/api/js?key=AIzaSyCkvJM7TtLf4c5hVEfNE2o3s8AO3nyYA5I&callback=initMap' async defer></script>"
+            "</body></html>"
+        )
+    
+    st.components.v1.html(_gmap_render(log_summ, map_type_js), height=565)
 
-    for _, r in log_summ.iterrows():
-        hotel = r.get("greeting_location","")
-        h_coords = next((v for k,v in HOTEL_COORDS.items() if k.lower() in (hotel or "").lower()), None)
-        if h_coords is None:
-            continue
-        # Jitter
-        lat = h_coords["lat"] + (r["convoy_order"]-10)*0.00025
-        lon = h_coords["lon"] + (r["convoy_order"]%5)*0.0003
-
-        # Route line
-        folium.PolyLine(
-            [[lat,lon],[BOS["lat"],BOS["lon"]]],
-            color=r["dot_color"], weight=1.5, opacity=0.5, dash_array="6 4",
-        ).add_to(m)
-
-        # Delegation marker
-        st_lbl = {"OK":"✓ Vaxtında","Delay":"⚡ Gecikmiş"}.get(r["map_status"],"⏳ Gözləyir")
-        folium.CircleMarker(
-            [lat,lon], radius=8,
-            color=r["dot_color"], fill=True,
-            fill_color=r["dot_color"], fill_opacity=0.9,
-            tooltip=r["country_name"],
-            popup=folium.Popup(
-                "<div style='min-width:160px'><b>" + str(r["country_name"]) + "</b><br>"
-                + str(r["pcc"]) + "<br>"
-                + "<b style='color:" + str(r["dot_color"]) + "'>" + str(st_lbl) + "</b><br>"
-                + str(hotel) + "</div>", max_width=200),
-        ).add_to(m)
-
-    st_folium(m, height=560, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 6. GPS İZLƏMƏ
@@ -753,33 +744,46 @@ elif page == "📡 GPS İzləmə":
     with tab1:
         gps_data = get_gps()
         if gps_data.empty:
-            st.info("Hələ GPS məlumatı yoxdur. Sürücülər 'Sürücü Linki' tabından GPS göndərə bilər.")
+            st.info("Hələ GPS məlumatı yoxdur.")
         else:
-            m2 = folium.Map(location=[40.40,49.87], zoom_start=12, tiles="CartoDB.DarkMatter")
-            # Hotels
-            for hotel, coords in HOTEL_COORDS.items():
-                folium.CircleMarker([coords["lat"],coords["lon"]], radius=10,
-                    color=coords["color"], fill=True, fill_color=coords["color"],
-                    fill_opacity=0.3, tooltip=hotel).add_to(m2)
-            # BOS
-            folium.CircleMarker([BOS["lat"],BOS["lon"]], radius=15,
-                color="#ff4444", fill=True, fill_color="#ff4444", fill_opacity=0.4, tooltip="BOS").add_to(m2)
-            # GPS dots
-            for _, g in gps_data.iterrows():
-                folium.Marker(
-                    [g["lat"],g["lon"]],
-                    icon=folium.DivIcon(html=f"""
-                    <div style='background:#D4AF37;color:#071120;font-size:10px;font-weight:700;
-                      padding:3px 7px;border-radius:12px;white-space:nowrap;'>
-                      🚗 {g['country']}
-                    </div>"""),
-                    tooltip=f"{g['country']} — {g['driver_name']}",
-                    popup=folium.Popup(
-                        f"<b>{g['country']}</b><br>{g['driver_name']}<br>"
-                        f"Speed: {g.get('speed_kmh',0)} km/h<br>"
-                        f"Updated: {g.get('updated_at','')[:19]}", max_width=200),
-                ).add_to(m2)
-            st_folium(m2, height=500, use_container_width=True)
+            def _gps_map(gps_data):
+                m_lines = []
+                for hotel, hc in HOTEL_COORDS.items():
+                    m_lines.append(
+                        "new google.maps.Marker({position:{lat:"+str(hc["lat"])+",lng:"+str(hc["lon"])+"},"
+                        "map:map,icon:{path:google.maps.SymbolPath.CIRCLE,scale:10,"
+                        "fillColor:'"+hc["color"]+"',fillOpacity:0.7,strokeColor:'#fff',strokeWeight:1}});"
+                    )
+                m_lines.append(
+                    "new google.maps.Marker({position:{lat:"+str(BOS["lat"])+",lng:"+str(BOS["lon"])+"},"
+                    "map:map,icon:{path:google.maps.SymbolPath.CIRCLE,scale:15,"
+                    "fillColor:'#ff4444',fillOpacity:0.9,strokeColor:'#fff',strokeWeight:2},"
+                    "label:{text:'BOS',color:'white',fontSize:'10px',fontWeight:'900'}});"
+                )
+                for _, g in gps_data.iterrows():
+                    try:
+                        cn_g = str(g.get("country","")).replace("'","\\'")
+                        m_lines.append(
+                            "new google.maps.Marker({position:{lat:"+str(float(g["lat"]))+",lng:"+str(float(g["lon"]))+"},"
+                            "map:map,title:'"+cn_g+"',"
+                            "icon:{url:'https://maps.google.com/mapfiles/ms/icons/cabs.png'}});"
+                        )
+                    except: pass
+                js = "\n".join(m_lines)
+                return (
+                    "<!DOCTYPE html><html><head><style>body{margin:0}#map{height:490px;width:100%}</style></head>"
+                    "<body><div id='map'></div><script>"
+                    "function initMap(){"
+                    "var map=new google.maps.Map(document.getElementById('map'),{"
+                    "center:{lat:40.40,lng:49.87},zoom:12,mapTypeId:'satellite'});"
+                    + js + "}"
+                    "</script>"
+                    "<script src='https://maps.googleapis.com/maps/api/js?key=AIzaSyCkvJM7TtLf4c5hVEfNE2o3s8AO3nyYA5I&callback=initMap' async defer></script>"
+                    "</body></html>"
+                )
+            st.components.v1.html(_gps_map(gps_data), height=500)
+            st.dataframe(gps_data[["country","driver_name","lat","lon","speed_kmh","updated_at"]],
+                use_container_width=True, hide_index=True)
             st.dataframe(gps_data[["country","driver_name","lat","lon","speed_kmh","updated_at"]],
                 use_container_width=True, hide_index=True)
 
@@ -811,7 +815,17 @@ elif page == "📡 GPS İzləmə":
                 st.success(f"✅ {v_country} — GPS göndərildi!")
                 st.rerun()
 
-     
+        st.markdown("---")
+        st.markdown("""
+        **📱 Telefon GPS-i avtomatik istifadə etmək üçün:**
+
+        Streamlit Cloud-a deploy etdikdən sonra sürücüyə bu linki göndər:
+        ```
+        https://[sizin-app].streamlit.app/?driver=TR001
+        ```
+        Telefon avtomatik GPS koordinatlarını göndərəcək.
+        """)
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 6b. SÜRÜCÜ GPS SƏHİFƏSİ
 # ══════════════════════════════════════════════════════════════════════════════
@@ -925,6 +939,25 @@ elif page == "📱 Sürücü GPS":
           padding:12px;font-family:monospace;font-size:12px;color:#5fb87a;'>
           📍 Lat: {lat_inp} | Lon: {lon_inp} | Sürət: {spd_inp} km/h
         </div>""", unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.markdown("### 🔗 Sürücülərə göndəriləcək linklər")
+    st.info("Bu linkləri müvafiq sürücülərə göndər — açanda ölkə avtomatik seçilmiş gəlir")
+
+    app_url = "https://ramilbayramov02-protokol-app.streamlit.app"
+    _, veh_all, _, _, _ = load_excel()
+    del_sorted = delegations.sort_values("convoy_order")
+
+    for _, d in del_sorted.iterrows():
+        cn = d["country_name"]
+        veh_c = veh_all[veh_all["country_name"]==cn]
+        if veh_c.empty:
+            continue
+        import urllib.parse
+        link = f"{app_url}?page=driver&country={urllib.parse.quote(cn)}"
+        col1, col2 = st.columns([3,1])
+        col1.markdown(f"**#{d['convoy_order']} {cn}** — {d.get('pcc','')}")
+        col2.code(link, language=None)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 7. SSENARİ MODU
