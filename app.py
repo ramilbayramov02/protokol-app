@@ -19,6 +19,20 @@ from calculations import (hotel_distances, scenario_simultaneous,
 from db import init_db, get_log, update_event, reset_event, upsert_gps, get_gps
 from report import generate_word_report
 
+# ── Logo ─────────────────────────────────────────────────────────────────────
+import base64, os
+
+def get_logo_b64():
+    try:
+        logo_path = os.path.join(os.path.dirname(__file__), "logo.jpeg")
+        with open(logo_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except:
+        return None
+
+LOGO_B64 = get_logo_b64()
+LOGO_HTML = f"<img src='data:image/jpeg;base64,{LOGO_B64}' style='height:90px;border-radius:50%;border:2px solid #D4AF37;box-shadow:0 0 20px rgba(212,175,55,0.4);'>" if LOGO_B64 else "🏛"
+
 # ── Page config ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Protokol Xidməti — Kortej Sistemi",
@@ -29,10 +43,10 @@ st.set_page_config(
 
 # ── LOGIN SİSTEMİ ─────────────────────────────────────────────────────────────
 USERS = {
-    "admin":  {"password": "azprotokol2026",  "role": "Bütün (Admin)"},
-    "pcc1":   {"password": "ucaltek",     "role": "PCC1"},
-    "pcc2":   {"password": "ucalurek",     "role": "PCC2"},
-    "pcc3":   {"password": "ucalcell",     "role": "PCC3"},
+    "admin":  {"password": "protokol2024",  "role": "Bütün (Admin)"},
+    "pcc1":   {"password": "pcc1_2024",     "role": "PCC1"},
+    "pcc2":   {"password": "pcc2_2024",     "role": "PCC2"},
+    "pcc3":   {"password": "pcc3_2024",     "role": "PCC3"},
 }
 
 def check_login(username, password):
@@ -49,11 +63,12 @@ if "username" not in st.session_state:
     st.session_state.username = ""
 
 if not st.session_state.logged_in:
-    st.markdown("""
-    <div style="max-width:420px;margin:80px auto 0;padding:40px;
+    st.markdown(f"""
+    <div style="max-width:420px;margin:60px auto 0;padding:40px;
       background:#0f2040;border:1px solid #D4AF37;border-radius:14px;
       box-shadow:0 8px 32px rgba(0,0,0,0.5);">
       <div style="text-align:center;margin-bottom:30px;">
+        <div style="margin-bottom:16px;">{LOGO_HTML}</div>
         <div style="font-size:11px;color:#8a9bb0;letter-spacing:1px;">
           Azərbaycan Respublikası Prezidentinin</div>
         <div style="font-size:18px;font-weight:900;color:#D4AF37;
@@ -146,10 +161,11 @@ init_db()
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("""
+    st.markdown(f"""
     <div style='text-align:center;padding:15px 0 10px;border-bottom:1px solid #D4AF37;margin-bottom:15px;'>
-      <div style='font-size:11px;color:#8a9bb0;'>Azərbaycan Respublikası Prezidentinin</div>
-      <div style='font-size:14px;font-weight:900;color:#D4AF37;letter-spacing:1px;'>PROTOKOL XİDMƏTİ</div>
+      <div style='margin-bottom:10px;'><img src='data:image/jpeg;base64,{LOGO_B64}' style='height:70px;border-radius:50%;border:2px solid #D4AF37;box-shadow:0 0 12px rgba(212,175,55,0.4);'></div>
+      <div style='font-size:10px;color:#8a9bb0;'>Azərbaycan Respublikası Prezidentinin</div>
+      <div style='font-size:13px;font-weight:900;color:#D4AF37;letter-spacing:1px;'>PROTOKOL XİDMƏTİ</div>
       <div style='font-size:10px;color:#6a8aaa;margin-top:3px;'>VIP Kortej Koordinasiya Sistemi</div>
     </div>
     """, unsafe_allow_html=True)
@@ -172,6 +188,7 @@ with st.sidebar:
         "🏨 Otel & Məsafə",
         "🗺️ Canlı Xəritə",
         "📡 GPS İzləmə",
+        "📱 Sürücü GPS",
         "🧮 Ssenari Modu",
         "📄 Hesabat",
     ], label_visibility="collapsed")
@@ -222,7 +239,12 @@ def next_pending(ev):
 # 1. ANA PANEL
 # ══════════════════════════════════════════════════════════════════════════════
 if page == "🏠 Ana Panel":
-    st.markdown("## 🏠 Canlı Əməliyyat Paneli")
+    col_logo, col_title = st.columns([1, 8])
+    with col_logo:
+        if LOGO_B64:
+            st.markdown(f"<img src='data:image/jpeg;base64,{LOGO_B64}' style='height:64px;border-radius:50%;border:2px solid #D4AF37;box-shadow:0 0 12px rgba(212,175,55,0.4);margin-top:4px;'>", unsafe_allow_html=True)
+    with col_title:
+        st.markdown("## Canlı Əməliyyat Paneli")
 
     log_f = pcc_filter(log)
     tot   = len(log_f)
@@ -799,6 +821,120 @@ elif page == "📡 GPS İzləmə":
         ```
         Telefon avtomatik GPS koordinatlarını göndərəcək.
         """)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 6b. SÜRÜCÜ GPS SƏHİFƏSİ
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "📱 Sürücü GPS":
+    st.markdown("## 📱 Sürücü GPS Göndərmə")
+
+    # URL parametrindən driver ID al
+    params = st.query_params
+    driver_id = params.get("driver", "")
+
+    st.markdown("""
+    <div style='background:#0f2040;border:1px solid #D4AF37;border-radius:10px;
+      padding:20px;margin-bottom:20px;'>
+      <div style='font-size:13px;color:#D4AF37;font-weight:700;margin-bottom:10px;'>
+        📱 Bu səhifəni sürücüyə göndər
+      </div>
+      <div style='font-size:11px;color:#8a9bb0;'>
+        Sürücü bu linki telefonunda açır → "GPS Göndər" düyməsini basır →
+        koordinatlar avtomatik göndərilir
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Sürücü məlumatları
+    col1, col2 = st.columns(2)
+    with col1:
+        from data_loader import load_excel
+        _, vehicles, staff, _, _ = load_excel()
+        v_country = st.selectbox("Ölkə:", sorted(vehicles["country_name"].unique()))
+        v_type    = st.selectbox("Kortej:", ["DYP","S1","VVİP","P1","D1"])
+
+    with col2:
+        veh_m = vehicles[(vehicles["country_name"]==v_country)&(vehicles["convoy_type"]==v_type)]
+        if not veh_m.empty:
+            vid      = veh_m.iloc[0]["vehicle_id"]
+            drv_m    = staff[(staff["vehicle_id"]==vid)&(staff["role"]=="Driver 1")]
+            drv_name = drv_m.iloc[0]["full_name"] if not drv_m.empty else "Sürücü"
+        else:
+            drv_name = "Sürücü"
+        st.markdown(f"<br><div style='color:#D4AF37;font-weight:700;margin-top:20px;'>👤 {drv_name}</div>", unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.markdown("### 📍 GPS Koordinat Göndər")
+
+    # JavaScript ilə real telefon GPS
+    st.components.v1.html("""
+    <div style="font-family:Arial;background:#0f2040;padding:20px;border-radius:10px;
+      border:1px solid #D4AF37;max-width:400px;margin:0 auto;">
+      <div id="status" style="color:#8a9bb0;font-size:12px;margin-bottom:12px;">
+        GPS hazırlanır...
+      </div>
+      <div id="coords" style="font-family:monospace;font-size:13px;color:#5fb87a;
+        margin-bottom:16px;"></div>
+      <button onclick="getGPS()" style="background:#D4AF37;color:#071120;border:none;
+        padding:12px 24px;border-radius:8px;font-weight:700;font-size:14px;
+        cursor:pointer;width:100%;">
+        📍 GPS Koordinatı Al
+      </button>
+    </div>
+    <script>
+    function getGPS() {
+      var status = document.getElementById('status');
+      var coords = document.getElementById('coords');
+      status.innerText = 'GPS alınır...';
+      status.style.color = '#D4AF37';
+      if (!navigator.geolocation) {
+        status.innerText = 'GPS dəstəklənmir!';
+        status.style.color = '#f87171';
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        function(pos) {
+          var lat = pos.coords.latitude.toFixed(6);
+          var lon = pos.coords.longitude.toFixed(6);
+          var spd = pos.coords.speed ? (pos.coords.speed * 3.6).toFixed(1) : 0;
+          coords.innerText = 'Lat: ' + lat + '\nLon: ' + lon + '\nSürət: ' + spd + ' km/h';
+          status.innerText = '✅ GPS alındı! Aşağıdakı dəyərləri kopyala:';
+          status.style.color = '#5fb87a';
+          // Streamlit-ə göndər
+          window.parent.postMessage({
+            type: 'streamlit:setComponentValue',
+            value: {lat: parseFloat(lat), lon: parseFloat(lon), speed: parseFloat(spd)}
+          }, '*');
+        },
+        function(err) {
+          status.innerText = 'GPS xətası: ' + err.message;
+          status.style.color = '#f87171';
+        },
+        {enableHighAccuracy: true, timeout: 10000}
+      );
+    }
+    // Avtomatik al
+    getGPS();
+    setInterval(getGPS, 15000);
+    </script>
+    """, height=200)
+
+    st.markdown("---")
+    st.markdown("**Əl ilə daxil et (GPS işləməsə):**")
+    col1, col2, col3 = st.columns(3)
+    lat_inp = col1.number_input("Latitude:",  value=40.3983, format="%.6f", step=0.0001)
+    lon_inp = col2.number_input("Longitude:", value=49.8672, format="%.6f", step=0.0001)
+    spd_inp = col3.number_input("Sürət (km/h):", value=0.0, min_value=0.0, step=1.0)
+
+    if st.button("📡 GPS Göndər", use_container_width=True):
+        vehicle_id = f"{v_country}_{v_type}"
+        upsert_gps(vehicle_id, v_country, drv_name, lat_inp, lon_inp, spd_inp)
+        st.success(f"✅ {v_country} — {drv_name} GPS göndərildi!")
+        st.markdown(f"""
+        <div style='background:#0a2010;border:1px solid #16a34a;border-radius:8px;
+          padding:12px;font-family:monospace;font-size:12px;color:#5fb87a;'>
+          📍 Lat: {lat_inp} | Lon: {lon_inp} | Sürət: {spd_inp} km/h
+        </div>""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 7. SSENARİ MODU
