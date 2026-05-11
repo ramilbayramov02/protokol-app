@@ -946,7 +946,7 @@ elif page == "📡 GPS İzləmə":
         """, unsafe_allow_html=True)
 
         import urllib.parse
-        app_url = "https://protokol-app-production.up.railway.app"
+       app_url = "https://t.me/protokol_gps_bot?start="
         del_sorted = delegations.sort_values("convoy_order")
 
         for _, d in del_sorted.iterrows():
@@ -961,7 +961,7 @@ elif page == "📡 GPS İzləmə":
                     d1 = staff[(staff["vehicle_id"]==v["vehicle_id"])&(staff["role"]=="Driver 1")]
                     drv_name = d1.iloc[0]["full_name"] if not d1.empty else "—"
                     drv_tel  = d1.iloc[0]["phone_number"] if not d1.empty else ""
-                    link = app_url + "/?driver=" + urllib.parse.quote(cn + "__" + convoy_type)
+                    link = "https://t.me/protokol_gps_bot?start=" + urllib.parse.quote(cn + "__" + convoy_type)
                     st.markdown(f"""
                     <div style='background:#152238;border:1px solid #2a3f5f;border-radius:8px;
                       padding:10px;margin-bottom:6px;'>
