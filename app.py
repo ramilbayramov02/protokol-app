@@ -946,7 +946,7 @@ elif page == "📡 GPS İzləmə":
         """, unsafe_allow_html=True)
 
         import urllib.parse
-        app_url = "https://ramilbayramov02-protokol-app.streamlit.app"
+        app_url = "https://protokol-app-production.up.railway.app"
         del_sorted = delegations.sort_values("convoy_order")
 
         for _, d in del_sorted.iterrows():
