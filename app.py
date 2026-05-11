@@ -238,7 +238,7 @@ if not st.session_state.logged_in:
         st.markdown("<div style='max-width:420px;margin:0 auto;'>", unsafe_allow_html=True)
         username = st.text_input("👤 İstifadəçi adı:", placeholder="pcc1 / pcc2 / pcc3 / admin")
         password = st.text_input("🔒 Parol:", type="password", placeholder="Parolu daxil edin")
-        submitted = st.form_submit_button("🔑 Daxil ol", use_container_width=True)
+        submitted = st.form_submit_button("🔑 Daxil ol", width='stretch')
         st.markdown("</div>", unsafe_allow_html=True)
 
         if submitted:
@@ -334,7 +334,7 @@ with st.sidebar:
 
     # Panel seçimi
     st.markdown("**📋 Panellər**")
-    page = st.radio("", [
+    page = st.radio("Panel", [
         "🏠 Ana Panel",
         "✍️ Vaxt Qeydiyyatı",
         "🌍 Ölkə & Kortej",
@@ -463,16 +463,7 @@ if page == "🏠 Ana Panel":
         if val == "OK": return "background-color:#0a2010;color:#5fb87a"
         return ""
 
-    st.dataframe(
-        df_show.style.map(
-            lambda v: "background-color:#2a0a0a;color:#f87171;font-weight:700" if v=="Delay" else "",
-            subset=["HS St"]
-        ).map(
-            lambda v: "background-color:#2a0a0a;color:#f87171;font-weight:700" if isinstance(v,int) and v>0 else "",
-            subset=["Gecik"]
-        ),
-        use_container_width=True, hide_index=True
-    )
+    st.dataframe(df_show, use_container_width=True, hide_index=True)
 
     # Pie chart
     st.markdown("### 📈 Status Paylanması")
@@ -492,7 +483,7 @@ if page == "🏠 Ana Panel":
             showlegend=False,
             margin=dict(t=20,b=20,l=20,r=20),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     with col2:
         pcc_stats = log_f.groupby("pcc").agg(
@@ -505,7 +496,7 @@ if page == "🏠 Ana Panel":
         fig2.update_layout(paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)", font_color="#c0d0e0",
             title_font_color="#D4AF37", margin=dict(t=40,b=20))
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 2. VAXT QEYDİYYATI
@@ -773,7 +764,7 @@ elif page == "🏨 Otel & Məsafə":
         fig.update_layout(paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)", font_color="#c0d0e0",
             title_font_color="#D4AF37")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     # Per hotel delegations
     st.markdown("### 🏨 Otel üzrə Delegasiyalar")
@@ -1142,7 +1133,7 @@ elif page == "📄 Hesabat":
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("📄 Word Hesabat Hazırla", use_container_width=True):
+        if st.button("📄 Word Hesabat Hazırla", width='stretch'):
             with st.spinner("Hazırlanır..."):
                 word_bytes = generate_word_report(
                     log_r, delegations,
